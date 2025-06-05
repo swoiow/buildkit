@@ -8,5 +8,5 @@ setup(
     author="Your Name",
     packages=find_packages(),
     install_requires=["setuptools", "Cython", "wheel"],
-    python_requires=">=3.12",
+    python_requires=">=3.8",
 )
