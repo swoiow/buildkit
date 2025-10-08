@@ -5,9 +5,10 @@ Buildkit 是一个围绕 `setuptools` 的轻量级构建工具包，帮助你在
 ## ✨ 功能概览
 
 - **构建摘要**：通过 `buildkit.summary.print_summary` 输出构建环境、包数量、扩展模块等关键信息，方便在 CI 中快速排查问题。
-- **临时构建目录**：`buildkit.summary.copy_to_temp_build_dir` 可以把源码复制到干净的临时目录中，避免脏文件影响打包结果，同时支持 `BUILD_TEMP_DIR`、`USE_TEMP_BUILD` 环境变量控制行为。
-- **Package 过滤**：`buildkit.build.FilterBuildPy` 对 `build_py` 命令扩展，允许使用通配模式排除不想被打包的源文件（如测试用例、临时脚本）。
+- **临时构建目录**：`buildkit.summary.copy_to_temp_build_dir` 可以把源码复制到干净的临时目录中，避免脏文件影响打包结果，同时支持 `BUILD_TEMP_DIR`、`USE_TEMP_BUILD` 环境变量控制行为，并可结合 `temp_build_workspace` 自动清理。
+- **Package 过滤**：`buildkit.build.FilterBuildPy` 对 `build_py` 命令扩展，允许使用通配模式排除不想被打包的源文件（如测试用例、临时脚本），也可以配合 `buildkit.cython_helper.resolve_python_sources` 精准筛选需要 Cython 化的模块。
 - **智能扩展构建**：`buildkit.build.SmartBuildExt` 和 `buildkit.build_ext.BuildExtCommand` 会在扩展编译完成后自动把生成的二进制复制到项目或 `dist/` 目录，省去手动移动文件的麻烦。
+- **Cython 目标收集**：`buildkit.cython_helper.build_extensions_from_targets` 支持一次性处理整个目录、指定的单个文件或通配目标，并可通过 `exclude_patterns` 排除不需要的模块。
 - **包收集工具**：`buildkit.utils.collect_packages` 对 `setuptools.find_packages` 做了简单封装，方便统一管理包收集逻辑。
 
 ## 🚀 安装
@@ -24,25 +25,45 @@ pip install buildkit
 
 ```python
 import os
+from contextlib import nullcontext
 
 from setuptools import setup
 
 from buildkit.build import FilterBuildPy, SmartBuildExt
-from buildkit.summary import (
-    copy_to_temp_build_dir,
-    print_summary,
-    get_package_dir_mapping,
-)
+from buildkit.summary import print_summary, temp_build_workspace
 from buildkit.utils import collect_packages
+from buildkit.cython_helper import (
+    build_extensions_from_targets,
+    safe_incremental_cythonize,
+)
 
 packages = collect_packages(exclude=["tests", "examples"])
 print_summary(packages)
 
-if os.environ.get("USE_TEMP_BUILD") == "1":
-    tmp_dir = copy_to_temp_build_dir(packages)
-    package_dir = get_package_dir_mapping(packages, tmp_dir)
-else:
-    package_dir = None
+context = (
+    temp_build_workspace(
+        packages,
+        exclude_patterns=["tests/**", "**/*_dev.py"],
+    )
+    if os.environ.get("USE_TEMP_BUILD") == "1"
+    else nullcontext((".", {}))
+)
+
+package_dir = None
+extensions = []
+with context as (source_root, package_dir_mapping):
+    if package_dir_mapping:
+        package_dir = package_dir_mapping
+
+    extensions = build_extensions_from_targets(
+        targets=[source_root],
+        package_dir=package_dir_mapping,
+        exclude_patterns=["tests/**", "**/_cli.py"],
+    )
+    extensions = safe_incremental_cythonize(
+        extensions,
+        compiler_directives={"language_level": "3"},
+    )
 
 setup(
     name="your-package",
@@ -52,6 +73,7 @@ setup(
         "build_py": FilterBuildPy(exclude_files=["*tests.py", "*_dev.py"]),
         "build_ext": SmartBuildExt,
     },
+    ext_modules=extensions,
 )
 ```
 
@@ -61,7 +83,36 @@ setup(
 |------------------|---------------------|----------|
 | `USE_TEMP_BUILD` | `0`                 | 设置为 `1` 时启用临时目录构建。 |
 | `BUILD_TEMP_DIR` | `.build_package_tmp`| 指定临时构建目录位置。 |
+| `KEEP_TEMP_BUILD`| `0`                 | 在自定义流程中可结合 `temp_build_workspace(..., cleanup=False)` 保留临时目录。 |
 | `DEBUG`          | `0`                 | 会在构建摘要中展示，方便自定义调试。 |
+
+## 🧱 Cython 构建技巧
+
+以下是一些常见的 Cython 构建场景，展示如何利用辅助函数快速生成 `Extension` 列表：
+
+```python
+from buildkit.cython_helper import build_extensions_from_targets
+
+# 1. 递归处理整个目录并排除测试
+extensions = build_extensions_from_targets(
+    targets=["src/my_pkg"],
+    source_roots={"src": ""},
+    exclude_patterns=["**/tests/**", "**/conftest.py"],
+)
+
+# 2. 指定单个文件，自动推断模块名
+single_extension = build_extensions_from_targets([
+    "src/my_pkg/critical_path.py",
+], source_roots={"src": ""})
+
+# 3. 混合通配符与路径
+mixed_extensions = build_extensions_from_targets([
+    "src/my_pkg/**/*.py",
+    "tools/helpers.py",
+], exclude_patterns=["**/__init__.py"])
+```
+
+将上述结果传入 `safe_incremental_cythonize` 即可完成增量构建。
 
 ## 📦 构建流程建议
 
