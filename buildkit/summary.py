@@ -1,8 +1,11 @@
 import os
 import platform
 import shutil
+import tempfile
+from contextlib import contextmanager
+from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 from distutils.dir_util import copy_tree
 
@@ -27,7 +30,51 @@ def print_summary(
     print(f" └─ DEBUG: {os.environ.get('DEBUG', '0')}")
 
 
-def copy_to_temp_build_dir(package_list: List[str], base: str = ".", target: str = TEMP_BUILD_DIR) -> str:
+def _match_exclude(rel_path: Path, patterns: Sequence[str]) -> bool:
+    if not patterns:
+        return False
+
+    rel_posix = rel_path.as_posix()
+    name = rel_path.name
+    return any(
+        fnmatchcase(rel_posix, pattern) or fnmatchcase(name, pattern)
+        for pattern in patterns
+    )
+
+
+def _copy_package_tree(
+    src_path: Path,
+    dst_path: Path,
+    exclude_patterns: Sequence[str],
+):
+    if not exclude_patterns:
+        copy_tree(str(src_path), str(dst_path))
+        return
+
+    def _ignore(src: str, names: List[str]) -> List[str]:
+        src_path_obj = Path(src)
+        rel_dir = src_path_obj.relative_to(src_path)
+        ignored: List[str] = []
+        for name in names:
+            rel_path = (rel_dir / name) if rel_dir != Path('.') else Path(name)
+            if _match_exclude(rel_path, exclude_patterns):
+                ignored.append(name)
+        return ignored
+
+    shutil.copytree(
+        src_path,
+        dst_path,
+        dirs_exist_ok=True,
+        ignore=_ignore,
+    )
+
+
+def copy_to_temp_build_dir(
+    package_list: List[str],
+    base: str = ".",
+    target: str = TEMP_BUILD_DIR,
+    exclude_patterns: Optional[Sequence[str]] = None,
+) -> str:
     """
     将要打包的 packages 拷贝到临时目录中，便于干净构建。
     """
@@ -36,13 +83,15 @@ def copy_to_temp_build_dir(package_list: List[str], base: str = ".", target: str
         shutil.rmtree(tmp_dir)
     tmp_dir.mkdir(parents=True)
 
+    exclude_patterns = exclude_patterns or []
+
     for pkg in package_list:
         rel_path = pkg.replace(".", "/")
         src_path = Path(base) / rel_path
         dst_path = tmp_dir / rel_path
         if src_path.exists():
             dst_path.parent.mkdir(parents=True, exist_ok=True)
-            copy_tree(str(src_path), str(dst_path))
+            _copy_package_tree(src_path, dst_path, exclude_patterns)
 
     print(f"📂 Copied source files to temporary dir: {tmp_dir}")
     return str(tmp_dir)
@@ -58,3 +107,37 @@ def get_package_dir_mapping(packages: List[str], tmp_dir: str = TEMP_BUILD_DIR) 
         if top_pkg not in mapping:
             mapping[top_pkg] = str(Path(tmp_dir) / top_pkg)
     return mapping
+
+
+@contextmanager
+def temp_build_workspace(
+    package_list: List[str],
+    base: str = ".",
+    target: Optional[str] = None,
+    exclude_patterns: Optional[Sequence[str]] = None,
+    cleanup: Optional[bool] = None,
+) -> Iterator[Tuple[str, Dict[str, str]]]:
+    """
+    构建临时目录上下文，复制源码并在退出时自动清理。
+    返回值为 (tmp_dir, package_dir_mapping)。
+    """
+
+    auto_dir = target is None
+    if auto_dir:
+        target = tempfile.mkdtemp(prefix="buildkit-")
+
+    should_cleanup = cleanup if cleanup is not None else auto_dir
+
+    tmp_dir = copy_to_temp_build_dir(
+        package_list,
+        base=base,
+        target=target,
+        exclude_patterns=exclude_patterns,
+    )
+
+    try:
+        mapping = get_package_dir_mapping(package_list, tmp_dir)
+        yield tmp_dir, mapping
+    finally:
+        if should_cleanup:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
