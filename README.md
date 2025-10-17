@@ -8,6 +8,7 @@ Buildkit 是一个围绕 `setuptools` 的轻量级构建工具包，帮助你在
 - **临时构建目录**：`buildkit.summary.copy_to_temp_build_dir` 可以把源码复制到干净的临时目录中，避免脏文件影响打包结果，同时支持 `BUILD_TEMP_DIR`、`USE_TEMP_BUILD` 环境变量控制行为，并可结合 `temp_build_workspace` 自动清理。
 - **Package 过滤**：`buildkit.build.FilterBuildPy` 对 `build_py` 命令扩展，允许使用通配模式排除不想被打包的源文件（如测试用例、临时脚本），也可以配合 `buildkit.cython_helper.resolve_python_sources` 精准筛选需要 Cython 化的模块。
 - **智能扩展构建**：`buildkit.build.SmartBuildExt` 和 `buildkit.build_ext.BuildExtCommand` 会在扩展编译完成后自动把生成的二进制复制到项目或 `dist/` 目录，省去手动移动文件的麻烦。
+- **Release 模式**：`buildkit.release.ReleaseBuildCommand` 支持在构建 wheel 后自动清理源码和中间文件，确保发布包干净。
 - **Cython 目标收集**：`buildkit.cython_helper.build_extensions_from_targets` 支持一次性处理整个目录、指定的单个文件或通配目标，并可通过 `exclude_patterns` 排除不需要的模块。
 - **包收集工具**：`buildkit.utils.collect_packages` 对 `setuptools.find_packages` 做了简单封装，方便统一管理包收集逻辑。
 
@@ -77,6 +78,40 @@ setup(
 )
 ```
 
+### Release 模式构建
+
+在需要生成干净的发布包时，可以在 `setup.py` 中启用 `ReleaseBuildCommand`，它对 `bdist_wheel` 进行扩展，新增以下选项：
+
+| 选项 / 环境变量 | 说明 |
+|----------------|------|
+| `--release` / `BUILD_RELEASE=1` | 开启 release 模式，若未指定删除选项则默认删除 `.py`/`.c`/扩展文件。 |
+| `--del-py` / `BUILD_RELEASE_DEL_PY=1` | 仅删除 Python 源文件（通常配合生成的 C 文件一起发布）。 |
+| `--del-c` / `BUILD_RELEASE_DEL_C=1` | 删除编译生成的 `.c` 文件。 |
+| `--del-so` / `BUILD_RELEASE_DEL_SO=1` | 删除扩展产物（`.so`/`.pyd`）。 |
+| `--del-all` / `BUILD_RELEASE_DEL_ALL=1` | 同时删除上述全部类型。 |
+| `--keep-patterns="pkg/**"` / `BUILD_RELEASE_KEEP` | 指定需要保留的文件模式，支持逗号分隔多个通配符。 |
+
+示例：
+
+```bash
+python setup.py bdist_wheel --release --del-c --del-so
+```
+
+在 `setup.py` 中注册命令类：
+
+```python
+from buildkit.release import ReleaseBuildCommand
+
+setup(
+    ...,
+    cmdclass={
+        "bdist_wheel": ReleaseBuildCommand,
+    },
+)
+```
+
+release 清理逻辑复用了 `buildkit.clean.CleanCommand`，也可以在脚本中实例化该命令并通过 `set_suffixes([...])` 执行更细粒度的删除。
+
 ### 常用环境变量
 
 | 环境变量         | 默认值              | 作用说明 |
@@ -85,6 +120,8 @@ setup(
 | `BUILD_TEMP_DIR` | `.build_package_tmp`| 指定临时构建目录位置。 |
 | `KEEP_TEMP_BUILD`| `0`                 | 在自定义流程中可结合 `temp_build_workspace(..., cleanup=False)` 保留临时目录。 |
 | `DEBUG`          | `0`                 | 会在构建摘要中展示，方便自定义调试。 |
+| `BUILD_RELEASE_KEEP` | 空 | 逗号分隔的通配模式，在 release 清理阶段会保留这些文件。 |
+| `BUILD_CLEAN_SUFFIXES` | 空 | 自定义 `clean` 命令删除的文件模式列表，默认移除 `.c`、`.so`、`.pyd`。 |
 
 ## 🧱 Cython 构建技巧
 
@@ -113,6 +150,17 @@ mixed_extensions = build_extensions_from_targets([
 ```
 
 将上述结果传入 `safe_incremental_cythonize` 即可完成增量构建。
+
+`buildkit.summary.filter_files` 提供了按通配模式过滤文件列表的工具函数，可用于构建前后统一筛选：
+
+```python
+from pathlib import Path
+
+from buildkit.summary import filter_files
+
+files = Path("src").glob("**/*")
+filtered = list(filter_files(files, ["**/tests/**", "**/*.md"]))
+```
 
 ## 📦 构建流程建议
 
