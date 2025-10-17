@@ -1,4 +1,11 @@
+from pathlib import Path
+from sysconfig import get_config_vars
+
 from setuptools import find_packages
+
+
+def get_cpy_suffix():
+    return Path(get_config_vars()["EXT_SUFFIX"]).suffix
 
 
 def collect_packages(**kwargs):

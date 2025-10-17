@@ -7,8 +7,6 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
-from distutils.dir_util import copy_tree
-
 
 TEMP_BUILD_DIR = os.environ.get("BUILD_TEMP_DIR", ".build_package_tmp")
 USE_TEMP_BUILD = os.environ.get("USE_TEMP_BUILD", "0") == "1"
@@ -17,7 +15,7 @@ USE_TEMP_BUILD = os.environ.get("USE_TEMP_BUILD", "0") == "1"
 def print_summary(
     package_list: List[str],
     ext_list: List = None,
-    exclude_files: List[str] = None
+    exclude_files: List[str] = None,
 ):
     """打印构建摘要信息，展示平台、包数、扩展模块数、是否启用临时构建目录等。"""
     print("📦 Build Summary")
@@ -47,16 +45,16 @@ def _copy_package_tree(
     dst_path: Path,
     exclude_patterns: Sequence[str],
 ):
-    if not exclude_patterns:
-        copy_tree(str(src_path), str(dst_path))
-        return
+    """Copy a package directory tree while respecting exclusion patterns."""
 
     def _ignore(src: str, names: List[str]) -> List[str]:
+        if not exclude_patterns:
+            return []
         src_path_obj = Path(src)
         rel_dir = src_path_obj.relative_to(src_path)
-        ignored: List[str] = []
+        ignored = []
         for name in names:
-            rel_path = (rel_dir / name) if rel_dir != Path('.') else Path(name)
+            rel_path = rel_dir / name if rel_dir != Path(".") else Path(name)
             if _match_exclude(rel_path, exclude_patterns):
                 ignored.append(name)
         return ignored
@@ -64,8 +62,8 @@ def _copy_package_tree(
     shutil.copytree(
         src_path,
         dst_path,
-        dirs_exist_ok=True,
-        ignore=_ignore,
+        dirs_exist_ok=True,  # allows merging into existing target
+        ignore=_ignore if exclude_patterns else None,
     )
 
 

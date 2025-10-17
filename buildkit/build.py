@@ -1,6 +1,5 @@
 import os
 import shutil
-import sysconfig
 from pathlib import Path
 from typing import List
 
@@ -8,8 +7,7 @@ from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.build_py import build_py as _build_py
 
 
-EXT_SUFFIX = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
 
 
 class FilterBuildPy(_build_py):
@@ -38,7 +36,7 @@ class SmartBuildExt(_build_ext):
     def build_extension(self, ext):
         super().build_extension(ext)
         ext_path = self.get_ext_fullpath(ext.name)
-        dest = os.path.join(BASE_DIR, os.path.basename(ext_path))
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        dest = BASE_DIR.joinpath(os.path.basename(ext_path))
+        dest.mkdir(parents=True, exist_ok=True)
         shutil.copy(ext_path, dest)
         print(f"✔ Moved {ext_path} -> {dest}")
