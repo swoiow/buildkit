@@ -1,6 +1,6 @@
 """Buildkit public API helpers."""
 
-from .clean import CleanCommand
+from .clean import ArtifactCleaner, CleanCommand
 from .cython_helper import (
     build_extensions_from_targets,
     find_cython_extensions_for_packages,
@@ -20,6 +20,7 @@ from .utils import collect_packages
 
 __all__ = [
     "build_extensions_from_targets",
+    "ArtifactCleaner",
     "CleanCommand",
     "collect_packages",
     "copy_to_temp_build_dir",

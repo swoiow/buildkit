@@ -1,19 +1,16 @@
 """Release mode build command helpers."""
 
 import os
-from pathlib import Path
 from typing import List, Optional, Sequence, Union
 
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 from buildkit.clean import (
-    CleanCommand,
-    DEFAULT_SUFFIX_PATTERNS,
-    iter_matched_files,
+    ArtifactCleaner,
+    C_SOURCE_PATTERNS,
+    COMPILED_SUFFIX_PATTERNS,
     normalize_patterns,
-    remove_files,
 )
-from buildkit.summary import filter_files
 
 
 def _env_flag(name: str) -> bool:
@@ -107,29 +104,10 @@ class ReleaseBuildCommand(_bdist_wheel):
         if self.del_py:
             patterns.append("*.py")
         if self.del_c:
-            patterns.append("*.c")
+            patterns.extend(C_SOURCE_PATTERNS)
         if self.del_so:
-            patterns.extend(DEFAULT_SUFFIX_PATTERNS)
+            patterns.extend(COMPILED_SUFFIX_PATTERNS)
         return normalize_patterns(patterns)
-
-    def _resolve_files_to_remove(self, patterns: Sequence[str]) -> List[Path]:
-        matched = iter_matched_files(patterns, Path("."))
-        if not self._parsed_keep_patterns:
-            return matched
-        return list(filter_files(matched, self._parsed_keep_patterns))
-
-    def _get_clean_command(self) -> CleanCommand:
-        try:
-            existing_cmd = self.get_finalized_command("clean")
-        except (AttributeError, KeyError):
-            existing_cmd = None
-
-        if isinstance(existing_cmd, CleanCommand):
-            return existing_cmd
-
-        cmd = CleanCommand(self.distribution)
-        cmd.ensure_finalized()
-        return cmd
 
     # -- Main command ------------------------------------------------------------
     def run(self):
@@ -142,17 +120,9 @@ class ReleaseBuildCommand(_bdist_wheel):
         if not patterns:
             return
 
-        files_to_remove = self._resolve_files_to_remove(patterns)
-
-        clean_cmd = self._get_clean_command()
-        if not self._parsed_keep_patterns:
-            clean_cmd.set_suffixes(patterns)
-            clean_cmd.run()
-            return
-
-        if files_to_remove:
-            remove_files(files_to_remove)
-
-        clean_cmd.set_suffixes([])
-        clean_cmd.run()
+        cleaner = ArtifactCleaner()
+        cleaner.set_patterns(patterns)
+        if self._parsed_keep_patterns:
+            cleaner.set_keep_patterns(self._parsed_keep_patterns)
+        cleaner.clean()
 

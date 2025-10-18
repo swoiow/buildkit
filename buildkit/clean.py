@@ -6,6 +6,7 @@ from typing import Iterable, List, Optional, Sequence, Set
 from setuptools import Command
 
 from buildkit.utils import get_cpy_suffix
+from buildkit.summary import filter_files
 
 
 TEMP_BUILD_DIR = os.environ.get("BUILD_TEMP_DIR", ".build_package_tmp")
@@ -13,12 +14,13 @@ TEMP_BUILD_DIR = os.environ.get("BUILD_TEMP_DIR", ".build_package_tmp")
 # Default suffix patterns that will be removed by the clean command.
 # Compiled suffix needs to be detected dynamically for cross-platform support.
 _DEFAULT_COMPILED_SUFFIX = get_cpy_suffix()
-DEFAULT_SUFFIX_PATTERNS: Sequence[str] = (
-    "*.c",
+C_SOURCE_PATTERNS: Sequence[str] = ("*.c",)
+COMPILED_SUFFIX_PATTERNS: Sequence[str] = (
     f"*{_DEFAULT_COMPILED_SUFFIX}" if _DEFAULT_COMPILED_SUFFIX else "*.so",
     "*.so",
     "*.pyd",
 )
+DEFAULT_SUFFIX_PATTERNS: Sequence[str] = (*C_SOURCE_PATTERNS, *COMPILED_SUFFIX_PATTERNS)
 
 
 def normalize_patterns(patterns: Sequence[str]) -> List[str]:
@@ -67,6 +69,43 @@ def remove_files(files: Iterable[Path]) -> List[Path]:
     return removed
 
 
+class ArtifactCleaner:
+    """Utility helper that performs artifact cleanup with optional keep patterns."""
+
+    def __init__(self, base_path: Path = Path(".")) -> None:
+        self.base_path = Path(base_path)
+        self._patterns: List[str] = list(DEFAULT_SUFFIX_PATTERNS)
+        self._keep_patterns: List[str] = []
+
+    # -- Configuration -----------------------------------------------------
+    def set_patterns(self, patterns: Sequence[str]) -> None:
+        self._patterns = normalize_patterns(patterns)
+
+    def set_keep_patterns(self, patterns: Sequence[str]) -> None:
+        self._keep_patterns = normalize_patterns(patterns)
+
+    # -- Core operations ---------------------------------------------------
+    def collect_files(self) -> List[Path]:
+        matched_files = iter_matched_files(self._patterns, self.base_path)
+        if not self._keep_patterns:
+            return matched_files
+        return list(filter_files(matched_files, self._keep_patterns))
+
+    def purge_files(self, files: Optional[Iterable[Path]] = None) -> List[Path]:
+        targets = list(files) if files is not None else self.collect_files()
+        return remove_files(targets)
+
+    def remove_build_dirs(self) -> None:
+        shutil.rmtree("build", ignore_errors=True)
+        shutil.rmtree(TEMP_BUILD_DIR, ignore_errors=True)
+
+    def clean(self, remove_build_dirs: bool = True) -> List[Path]:
+        removed = self.purge_files()
+        if remove_build_dirs:
+            self.remove_build_dirs()
+        return removed
+
+
 class CleanCommand(Command):
     """Clean build artifacts such as .c, .so/.pyd files and build directories."""
 
@@ -82,6 +121,7 @@ class CleanCommand(Command):
     def initialize_options(self):
         self.suffixes: Optional[Sequence[str]] = None
         self._patterns: List[str] = list(DEFAULT_SUFFIX_PATTERNS)
+        self._cleaner = ArtifactCleaner()
 
     def finalize_options(self):
         if self.suffixes is None:
@@ -103,7 +143,5 @@ class CleanCommand(Command):
         self._patterns = normalize_patterns(suffixes)
 
     def run(self):
-        matched_files = iter_matched_files(self._patterns)
-        remove_files(matched_files)
-        shutil.rmtree("build", ignore_errors=True)
-        shutil.rmtree(TEMP_BUILD_DIR, ignore_errors=True)
+        self._cleaner.set_patterns(self._patterns)
+        self._cleaner.clean()
