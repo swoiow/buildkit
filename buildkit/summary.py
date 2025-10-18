@@ -5,7 +5,7 @@ import tempfile
 from contextlib import contextmanager
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 TEMP_BUILD_DIR = os.environ.get("BUILD_TEMP_DIR", ".build_package_tmp")
@@ -38,6 +38,25 @@ def _match_exclude(rel_path: Path, patterns: Sequence[str]) -> bool:
         fnmatchcase(rel_posix, pattern) or fnmatchcase(name, pattern)
         for pattern in patterns
     )
+
+
+def filter_files(files: Iterable[Path], patterns: Sequence[str]) -> Iterator[Path]:
+    """Yield files that do not match any of the provided exclude patterns."""
+
+    if not patterns:
+        for file_path in files:
+            yield Path(file_path)
+        return
+
+    cwd = Path.cwd()
+    for file_path in files:
+        path_obj = Path(file_path)
+        try:
+            rel_path = path_obj.relative_to(cwd)
+        except ValueError:
+            rel_path = path_obj
+        if not _match_exclude(rel_path, patterns):
+            yield path_obj
 
 
 def _copy_package_tree(
