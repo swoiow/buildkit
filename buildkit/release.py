@@ -1,14 +1,15 @@
 """Release mode build command helpers."""
 
 import os
+from pathlib import Path
 from typing import List, Optional, Sequence, Union
 
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 from buildkit.clean import (
-    ArtifactCleaner,
     C_SOURCE_PATTERNS,
     COMPILED_SUFFIX_PATTERNS,
+    clean_artifacts,
     normalize_patterns,
 )
 
@@ -120,9 +121,10 @@ class ReleaseBuildCommand(_bdist_wheel):
         if not patterns:
             return
 
-        cleaner = ArtifactCleaner()
-        cleaner.set_patterns(patterns)
-        if self._parsed_keep_patterns:
-            cleaner.set_keep_patterns(self._parsed_keep_patterns)
-        cleaner.clean()
+        clean_artifacts(
+            patterns,
+            keep_patterns=self._parsed_keep_patterns,
+            base_path=Path.cwd(),
+            remove_build_directories=True,
+        )
 

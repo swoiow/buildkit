@@ -69,41 +69,47 @@ def remove_files(files: Iterable[Path]) -> List[Path]:
     return removed
 
 
-class ArtifactCleaner:
-    """Utility helper that performs artifact cleanup with optional keep patterns."""
+def collect_artifacts(
+    patterns: Sequence[str],
+    *,
+    keep_patterns: Optional[Sequence[str]] = None,
+    base_path: Path = Path("."),
+) -> List[Path]:
+    """Collect files matching ``patterns`` while honoring optional keep filters."""
 
-    def __init__(self, base_path: Path = Path(".")) -> None:
-        self.base_path = Path(base_path)
-        self._patterns: List[str] = list(DEFAULT_SUFFIX_PATTERNS)
-        self._keep_patterns: List[str] = []
+    base_path = Path(base_path)
+    matched_files = iter_matched_files(patterns, base_path)
+    if not keep_patterns:
+        return matched_files
+    return list(filter_files(matched_files, normalize_patterns(keep_patterns)))
 
-    # -- Configuration -----------------------------------------------------
-    def set_patterns(self, patterns: Sequence[str]) -> None:
-        self._patterns = normalize_patterns(patterns)
 
-    def set_keep_patterns(self, patterns: Sequence[str]) -> None:
-        self._keep_patterns = normalize_patterns(patterns)
+def remove_build_dirs(base_path: Path = Path(".")) -> None:
+    """Remove common build directories relative to ``base_path``."""
 
-    # -- Core operations ---------------------------------------------------
-    def collect_files(self) -> List[Path]:
-        matched_files = iter_matched_files(self._patterns, self.base_path)
-        if not self._keep_patterns:
-            return matched_files
-        return list(filter_files(matched_files, self._keep_patterns))
+    base_path = Path(base_path)
+    shutil.rmtree(base_path / "build", ignore_errors=True)
+    shutil.rmtree(base_path / TEMP_BUILD_DIR, ignore_errors=True)
 
-    def purge_files(self, files: Optional[Iterable[Path]] = None) -> List[Path]:
-        targets = list(files) if files is not None else self.collect_files()
-        return remove_files(targets)
 
-    def remove_build_dirs(self) -> None:
-        shutil.rmtree("build", ignore_errors=True)
-        shutil.rmtree(TEMP_BUILD_DIR, ignore_errors=True)
+def clean_artifacts(
+    patterns: Sequence[str],
+    *,
+    keep_patterns: Optional[Sequence[str]] = None,
+    base_path: Path = Path("."),
+    remove_build_directories: bool = True,
+) -> List[Path]:
+    """Remove files matching ``patterns`` and optionally delete build directories."""
 
-    def clean(self, remove_build_dirs: bool = True) -> List[Path]:
-        removed = self.purge_files()
-        if remove_build_dirs:
-            self.remove_build_dirs()
-        return removed
+    targets = collect_artifacts(
+        patterns,
+        keep_patterns=keep_patterns,
+        base_path=base_path,
+    )
+    removed = remove_files(targets)
+    if remove_build_directories:
+        remove_build_dirs(base_path=base_path)
+    return removed
 
 
 class CleanCommand(Command):
@@ -121,7 +127,6 @@ class CleanCommand(Command):
     def initialize_options(self):
         self.suffixes: Optional[Sequence[str]] = None
         self._patterns: List[str] = list(DEFAULT_SUFFIX_PATTERNS)
-        self._cleaner = ArtifactCleaner()
 
     def finalize_options(self):
         if self.suffixes is None:
@@ -143,5 +148,9 @@ class CleanCommand(Command):
         self._patterns = normalize_patterns(suffixes)
 
     def run(self):
-        self._cleaner.set_patterns(self._patterns)
-        self._cleaner.clean()
+        clean_artifacts(
+            self._patterns,
+            keep_patterns=None,
+            base_path=Path.cwd(),
+            remove_build_directories=True,
+        )

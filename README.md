@@ -110,7 +110,7 @@ setup(
 )
 ```
 
-release 清理逻辑复用了 `buildkit.clean.CleanCommand`，也可以在脚本中实例化该命令并通过 `set_suffixes([...])` 执行更细粒度的删除。
+release 清理逻辑复用了 `buildkit.clean.clean_artifacts` 辅助函数，也可以在脚本中直接调用该函数或复用 `CleanCommand` 自定义需要删除的文件模式。
 
 ### 常用环境变量
 
