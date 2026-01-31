@@ -1,131 +1,78 @@
-# Buildkit
+# buildkit
 
-Buildkit 是一个围绕 `setuptools` 的轻量级构建工具包，帮助你在构建 Python 包或 Cython 扩展时更好地控制流程。它提供了一组可直接复用的命令类与实用工具，适合在自定义的 `setup.py`/`pyproject` 项目中快速集成。
+buildkit 是一套 `setup.py` 时代的构建工具集，重点提供 `--old` / `--release` 模式与可复用的命令类。
+buildkit is a `setup.py`-era build toolkit focused on `--old` / `--release` modes and reusable command classes.
 
-## ✨ 功能概览
+## Goals / 目标
+- 构建逻辑可复用：多项目共享一致的 `setup.py` 行为。
+  - Reusable build logic across projects with consistent `setup.py` behavior.
+- 发布包隐藏 `.py/.c` 源文件，保持输出目录清晰。
+  - Hide `.py/.c` sources in release builds for clean outputs.
+- 继续使用 `setup.py`，避免纯 `pyproject.toml` 的动态限制。
+  - Keep `setup.py` for dynamic logic instead of a pure `pyproject.toml`.
 
-- **构建摘要**：通过 `buildkit.summary.print_summary` 输出构建环境、包数量、扩展模块等关键信息，方便在 CI 中快速排查问题。
-- **临时构建目录**：`buildkit.summary.copy_to_temp_build_dir` 可以把源码复制到干净的临时目录中，避免脏文件影响打包结果，同时支持 `BUILD_TEMP_DIR`、`USE_TEMP_BUILD` 环境变量控制行为，并可结合 `temp_build_workspace` 自动清理。
-- **Package 过滤**：`buildkit.build.FilterBuildPy` 对 `build_py` 命令扩展，允许使用通配模式排除不想被打包的源文件（如测试用例、临时脚本），也可以配合 `buildkit.cython_helper.resolve_python_sources` 精准筛选需要 Cython 化的模块。
-- **智能扩展构建**：`buildkit.build.SmartBuildExt` 和 `buildkit.build_ext.BuildExtCommand` 会在扩展编译完成后自动把生成的二进制复制到项目或 `dist/` 目录，省去手动移动文件的麻烦。
-- **Cython 目标收集**：`buildkit.cython_helper.build_extensions_from_targets` 支持一次性处理整个目录、指定的单个文件或通配目标，并可通过 `exclude_patterns` 排除不需要的模块。
-- **包收集工具**：`buildkit.utils.collect_packages` 对 `setuptools.find_packages` 做了简单封装，方便统一管理包收集逻辑。
+## Quick Start / 快速开始
+- 开发安装：`python -m pip install -e .`
+  - Editable install: `python -m pip install -e .`
+- 构建 wheel：`python -m build --wheel`
+  - Build a wheel: `python -m build --wheel`
 
-## 🚀 安装
-
-```bash
-pip install buildkit
-```
-
-或在你的项目中以子模块 / 直接复制源码的方式引入。
-
-## 🛠️ 在 setup.py 中使用
-
-下面演示如何在传统的 `setup.py` 项目中集成 Buildkit：
+## Setup.py Example / setup.py 示例
+下面示例展示 `--old` / `--release` 的统一入口（简化版）：
+The example below shows a unified entry for `--old` / `--release` (simplified):
 
 ```python
-import os
-from contextlib import nullcontext
+from pathlib import Path
 
+from buildkit.commands import CleanBuild, ReleaseBuild
+from buildkit.cython import extensions_from_sources, filter_changed_sources, safe_cythonize
+from buildkit.options import default_build_options
 from setuptools import setup
 
-from buildkit.build import FilterBuildPy, SmartBuildExt
-from buildkit.summary import print_summary, temp_build_workspace
-from buildkit.utils import collect_packages
-from buildkit.cython_helper import (
-    build_extensions_from_targets,
-    safe_incremental_cythonize,
-)
+options = default_build_options()
 
-packages = collect_packages(exclude=["tests", "examples"])
-print_summary(packages)
+packages = ["yourpkg", "yourpkg.core"]
+package_dir = {"yourpkg": "yourpkg"}
 
-context = (
-    temp_build_workspace(
-        packages,
-        exclude_patterns=["tests/**", "**/*_dev.py"],
+ext_modules = []
+if not options.flags.is_old:
+    sources = [Path("yourpkg/core/tool.py")]
+    if options.cython_incremental:
+        sources = filter_changed_sources(sources, options.cy_cache_file)
+    ext_modules = safe_cythonize(
+        extensions_from_sources(sources, base_dir=options.base_dir),
+        options.cython_directives,
     )
-    if os.environ.get("USE_TEMP_BUILD") == "1"
-    else nullcontext((".", {}))
-)
 
-package_dir = None
-extensions = []
-with context as (source_root, package_dir_mapping):
-    if package_dir_mapping:
-        package_dir = package_dir_mapping
-
-    extensions = build_extensions_from_targets(
-        targets=[source_root],
-        package_dir=package_dir_mapping,
-        exclude_patterns=["tests/**", "**/_cli.py"],
-    )
-    extensions = safe_incremental_cythonize(
-        extensions,
-        compiler_directives={"language_level": "3"},
-    )
+class BuildExt(ReleaseBuild):
+    options = options
+    keep_files = {"__init__.py", "version.py"}
 
 setup(
-    name="your-package",
+    name="yourpkg",
+    cmdclass={"build_ext": BuildExt, "clean": CleanBuild},
+    ext_modules=ext_modules,
     packages=packages,
     package_dir=package_dir,
-    cmdclass={
-        "build_py": FilterBuildPy(exclude_files=["*tests.py", "*_dev.py"]),
-        "build_ext": SmartBuildExt,
-    },
-    ext_modules=extensions,
 )
 ```
 
-### 常用环境变量
+## Modules / 模块概览
+- `buildkit/commands.py`: `ReleaseBuild` 与 `CleanBuild`。
+  - `ReleaseBuild` and `CleanBuild`.
+- `buildkit/cython.py`: 源发现与 Cython 编译。
+  - Source discovery and Cython compilation.
+- `buildkit/options.py`: 统一构建配置。
+  - Central build options.
+- `buildkit/flags.py`: 解析 `--old` / `--release`。
+  - Parses `--old` / `--release`.
+- `buildkit/release.py`: 发布模式源码剥离。
+  - Release-mode source stripping.
 
-| 环境变量         | 默认值              | 作用说明 |
-|------------------|---------------------|----------|
-| `USE_TEMP_BUILD` | `0`                 | 设置为 `1` 时启用临时目录构建。 |
-| `BUILD_TEMP_DIR` | `.build_package_tmp`| 指定临时构建目录位置。 |
-| `KEEP_TEMP_BUILD`| `0`                 | 在自定义流程中可结合 `temp_build_workspace(..., cleanup=False)` 保留临时目录。 |
-| `DEBUG`          | `0`                 | 会在构建摘要中展示，方便自定义调试。 |
+## Why setup.py / 为何保留 setup.py
+`setup.py` 能承载条件编译与发布模式清理，适合构建逻辑复杂的项目。
+`setup.py` handles conditional builds and release cleanup, which suits complex build logic.
 
-## 🧱 Cython 构建技巧
-
-以下是一些常见的 Cython 构建场景，展示如何利用辅助函数快速生成 `Extension` 列表：
-
-```python
-from buildkit.cython_helper import build_extensions_from_targets
-
-# 1. 递归处理整个目录并排除测试
-extensions = build_extensions_from_targets(
-    targets=["src/my_pkg"],
-    source_roots={"src": ""},
-    exclude_patterns=["**/tests/**", "**/conftest.py"],
-)
-
-# 2. 指定单个文件，自动推断模块名
-single_extension = build_extensions_from_targets([
-    "src/my_pkg/critical_path.py",
-], source_roots={"src": ""})
-
-# 3. 混合通配符与路径
-mixed_extensions = build_extensions_from_targets([
-    "src/my_pkg/**/*.py",
-    "tools/helpers.py",
-], exclude_patterns=["**/__init__.py"])
-```
-
-将上述结果传入 `safe_incremental_cythonize` 即可完成增量构建。
-
-## 📦 构建流程建议
-
-1. **准备包列表**：使用 `collect_packages` 或手动指定。
-2. **打印摘要**：在构建开始时调用 `print_summary`，快速了解当前环境。
-3. **可选临时目录**：在需要保持构建目录干净时使用 `copy_to_temp_build_dir`。
-4. **自定义命令**：将 `FilterBuildPy`、`SmartBuildExt` 或 `BuildExtCommand` 注入到 `cmdclass` 中，获得更强大的扩展构建体验。
-5. **发布**：按需结合 `wheel`、`twine` 等工具发布产物。
-
-## 🤝 贡献
-
-欢迎提交 Issue 或 Pull Request，补充更多构建场景支持。如果你在项目中使用了 Buildkit，也欢迎分享经验或改进建议。
-
-## 📄 许可证
-
-本项目采用 MIT License 许可。
+## More Examples / 更多示例
+详细场景请见 `docs/setup-examples.md`。
+See `docs/setup-examples.md` for more scenarios.
