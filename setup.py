@@ -3,10 +3,19 @@ from setuptools import find_packages, setup
 
 setup(
     name="buildkit",
-    version="0.2.0",
-    description="A lightweight build toolkit for Python packaging (Cython, filtering, summary, wheel control)",
-    author="Your Name",
+    version="0.3.0",
+    description="A setup.py-first build toolkit with release stripping and Cython helpers",
+    author="git@pylab.me",
     packages=find_packages(),
-    install_requires=["setuptools", "Cython", "wheel"],
+    install_requires=[
+        "setuptools",
+        "Cython",
+        "wheel"
+    ],
+    entry_points={
+        "console_scripts": [
+            "buildkit=buildkit.cli:main",
+        ],
+    },
     python_requires=">=3.8",
 )

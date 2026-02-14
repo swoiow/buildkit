@@ -24,6 +24,8 @@ def print_summary(
     :return: None.
     """
     flags = options.flags if options else None
+    print("")
+    print("========================================")
     print("[SUMMARY] Build Summary")
     print(" ├─ OS:", platform.system(), "/", platform.platform())
     print(" ├─ Python:", platform.python_version())
@@ -35,6 +37,8 @@ def print_summary(
         print(" ├─ Release Mode:", "ON" if flags and flags.is_release else "OFF")
         print(" ├─ Old Mode:", "ON" if flags and flags.is_old else "OFF")
     print(f" └─ DEBUG: {os.environ.get('DEBUG', '0')}")
+    print("========================================")
+    print("")
 
 
 def copy_to_temp_build_dir(

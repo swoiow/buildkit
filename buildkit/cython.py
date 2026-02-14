@@ -1,6 +1,7 @@
 import json
+from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Set
 
 from Cython.Compiler.Errors import CompileError
 from setuptools import Extension
@@ -35,10 +36,21 @@ def _ensure_cythonize():
     return cythonize
 
 
+def _is_excluded_path(path: Path, exclude_globs: List[str], exclude_dirs: Set[str]) -> bool:
+    if any(part in exclude_dirs for part in path.parts):
+        return True
+    if not exclude_globs:
+        return False
+    posix_path = path.as_posix()
+    return any(fnmatchcase(posix_path, pattern) for pattern in exclude_globs)
+
+
 def discover_sources_from_packages(
     packages: List[str],
     package_dir: Dict[str, str],
     exclude_init: bool = True,
+    exclude_globs: Optional[List[str]] = None,
+    exclude_dirs: Optional[Set[str]] = None,
 ) -> List[Path]:
     """从包列表中发现 .py 源文件。
 
@@ -48,6 +60,8 @@ def discover_sources_from_packages(
     :return: list of source paths.
     """
     sources: List[Path] = []
+    exclude_globs = exclude_globs or []
+    exclude_dirs = exclude_dirs or set()
     for pkg in packages:
         parts = pkg.split(".")
         top_pkg = parts[0]
@@ -56,6 +70,8 @@ def discover_sources_from_packages(
         if not pkg_dir.exists():
             continue
         for py_file in pkg_dir.rglob("*.py"):
+            if _is_excluded_path(py_file, exclude_globs, exclude_dirs):
+                continue
             if exclude_init and py_file.name == "__init__.py":
                 continue
             sources.append(py_file)
@@ -85,6 +101,7 @@ def extensions_from_packages(
     packages: List[str],
     package_dir: Dict[str, str],
     exclude_init: bool = True,
+    base_dir: Optional[Path] = None,
 ) -> List[Extension]:
     """从包列表直接生成 Extension。
 
@@ -94,7 +111,7 @@ def extensions_from_packages(
     :return: list of Extension.
     """
     sources = discover_sources_from_packages(packages, package_dir, exclude_init=exclude_init)
-    return extensions_from_sources(sources, base_dir=Path.cwd())
+    return extensions_from_sources(sources, base_dir=base_dir or Path.cwd())
 
 
 def safe_cythonize(extensions: List[Extension], compiler_directives: Dict[str, object]) -> List[Extension]:

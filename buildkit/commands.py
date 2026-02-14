@@ -32,7 +32,12 @@ class ReleaseBuild(build_ext):
         super().run()
         options = self._effective_options()
         if not options.flags.is_release:
-            print_summary([], getattr(self, "extensions", None), options=options)
+            if options.summary_enabled:
+                print_summary(
+                    getattr(self, "package_list", []),
+                    getattr(self, "extensions", None),
+                    options=options,
+                )
             return
         removed = strip_sources(
             options.base_dir,
@@ -49,7 +54,12 @@ class ReleaseBuild(build_ext):
                 options.skip_dirs,
             )
         self.post_release_cleanup(removed, options)
-        print_summary([], getattr(self, "extensions", None), options=options)
+        if options.summary_enabled:
+            print_summary(
+                getattr(self, "package_list", []),
+                getattr(self, "extensions", None),
+                options=options,
+            )
 
     def post_release_cleanup(self, removed: int, options: BuildOptions) -> None:
         """发布模式后置钩子，供子类覆盖。

@@ -13,6 +13,7 @@ class BuildOptions:
 
     :param flags: build flags.
     :param base_dir: project root for cleanup and discovery.
+    :param build_root: build root for release stripping.
     :param keep_files: file names to keep when stripping sources.
     :param strip_patterns: glob patterns to remove in release mode.
     :param skip_dirs: directory names to skip during cleanup.
@@ -21,11 +22,16 @@ class BuildOptions:
     :param cython_directives: compiler directives for cythonize.
     :param cython_incremental: enable incremental cythonize.
     :param cy_cache_file: cache file path for incremental builds.
+    :param summary_enabled: enable summary output.
+    :param exclude_package_patterns: package name patterns to exclude.
+    :param exclude_source_globs: source file glob patterns to exclude.
+    :param exclude_source_dirs: directory names to exclude from source discovery.
     """
 
     flags: BuildFlags
     base_dir: Path = field(default_factory=lambda: Path.cwd())
-    keep_files: Set[str] = field(default_factory=lambda: {"__init__.py"})
+    build_root: Optional[Path] = None
+    keep_files: Set[str] = field(default_factory=lambda: {"__init__.py", "pkg_info.py"})
     strip_patterns: List[str] = field(default_factory=lambda: ["*.py", "*.c"])
     skip_dirs: Set[str] = field(
         default_factory=lambda: {
@@ -42,6 +48,10 @@ class BuildOptions:
     cython_directives: Dict[str, object] = field(default_factory=lambda: dict(CYTHON_DIRECTIVES_SIMPLE))
     cython_incremental: bool = False
     cy_cache_file: Path = field(default_factory=lambda: Path(".cycache"))
+    summary_enabled: bool = True
+    exclude_package_patterns: List[str] = field(default_factory=list)
+    exclude_source_globs: List[str] = field(default_factory=list)
+    exclude_source_dirs: List[str] = field(default_factory=list)
 
     def merged_with_overrides(
         self,
@@ -59,6 +69,7 @@ class BuildOptions:
         return BuildOptions(
             flags=self.flags,
             base_dir=self.base_dir,
+            build_root=self.build_root,
             keep_files=set(self.keep_files) | set(keep_files or set()),
             strip_patterns=list(self.strip_patterns) + list(strip_patterns or []),
             skip_dirs=set(self.skip_dirs) | set(skip_dirs or set()),
@@ -67,6 +78,10 @@ class BuildOptions:
             cython_directives=dict(self.cython_directives),
             cython_incremental=self.cython_incremental,
             cy_cache_file=self.cy_cache_file,
+            summary_enabled=self.summary_enabled,
+            exclude_package_patterns=list(self.exclude_package_patterns),
+            exclude_source_globs=list(self.exclude_source_globs),
+            exclude_source_dirs=list(self.exclude_source_dirs),
         )
 
 
