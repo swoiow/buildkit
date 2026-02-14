@@ -10,6 +10,9 @@ from buildkit.options import default_build_options
 from buildkit.plan import BuildPlan
 from setuptools import setup
 
+
+BASE_DIR = Path(__file__).resolve().parent
+
 # 解析 --old / --release
 options = default_build_options()
 
@@ -51,9 +54,22 @@ def copy_assets(plan: BuildPlan) -> None:
 
 plan = BuildPlan(
     options=options,
-    packages=["yourpkg", "yourpkg.core"],
-    package_dir={"yourpkg": "yourpkg"},
-    # exclude_packages=["yourpkg.experimental"],
+    
+    # 写法一：src 布局 (Standard src-layout)
+    # 最推荐的做法。项目根目录下有个 src/ 文件夹，里面才是包。
+    # "" 表示根搜索路径，"src" 表示去该目录下找 packages 中列出的包。
+    packages=["good_python", "good_python.core"],
+    package_dir={"": "src"},
+
+    # --- 或者 ---
+
+    # 写法二：平铺布局 (Flat layout)
+    # 如果你的 good_python 文件夹直接就在项目根目录下（没有 src 文件夹）。
+    # 此时不需要 package_dir 映射，或者映射为空。
+    # packages=["good_python", "good_python.core"],
+    # package_dir={"": "."},
+
+    # exclude_packages=["good_python.experimental"],
     # exclude_source_globs=["**/tmp/*.py"],
     # exclude_source_dirs=["tmp"],
     asset_copy_hook=copy_assets,
@@ -63,8 +79,20 @@ setup_kwargs, ext_modules = plan.build()
 setup_kwargs["cmdclass"] = plan.cmdclass(build_ext_cls=BuildExt)
 
 setup(
-    name="yourpkg",
+    name="good_python",
+    version="0.1.0",
+    description="Short package description",
+    long_description=Path("README.md").read_text(encoding="utf-8"),
+    long_description_content_type="text/markdown",
+    author="Your Name",
+    author_email="you@example.com",
+    url="https://example.com/good_python",
+    license="MIT",
+    python_requires=">=3.9",
+    install_requires=[],
+    extras_require={},
     ext_modules=ext_modules,
+    include_package_data=True,
     **setup_kwargs,
 )
 """

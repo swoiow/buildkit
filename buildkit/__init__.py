@@ -11,6 +11,7 @@ from .cython import (
 )
 from .flags import BuildFlags, consume_build_flags
 from .options import BuildOptions, default_build_options
+from .version import read_version
 
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "extensions_from_sources",
     "filter_changed_sources",
     "safe_cythonize",
+    "read_version",
 ]

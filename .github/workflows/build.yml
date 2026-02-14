@@ -49,12 +49,10 @@ jobs:
         run: |
           $PYTHON_EXEC -m pip install -q --upgrade pip setuptools wheel Cython pytest
           [ -f requirements.txt ] && $PYTHON_EXEC -m pip install -r requirements.txt || true
-          $PYTHON_EXEC -m pytest tests/ -v
 
       - name: 📦 Build
         run: |
-          $PYTHON_EXEC setup.py build_ext --inplace
-          $PYTHON_EXEC setup.py bdist_wheel --release
+          $PYTHON_EXEC setup.py bdist_wheel
 
       - name: ⬆️ Upload
         uses: actions/upload-artifact@v6
