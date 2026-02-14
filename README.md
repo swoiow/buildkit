@@ -17,6 +17,17 @@ buildkit is a `setup.py`-era build toolkit focused on `--old` / `--release` mode
 - 构建 wheel：`python -m build --wheel`
   - Build a wheel: `python -m build --wheel`
 
+## Flags / 构建标志
+
+`--old` 与 `--release` 是构建标志，不是命令，需要搭配 `setup.py` 命令使用。
+`--old` and `--release` are flags (not commands) and must be used with a `setup.py` command.
+
+示例：
+Examples:
+
+- `python setup.py build --old`
+- `python setup.py bdist_wheel --release`
+
 ## Setup.py Example / setup.py 示例
 下面示例展示 `--old` / `--release` 的统一入口（简化版）：
 The example below shows a unified entry for `--old` / `--release` (simplified):
@@ -57,6 +68,24 @@ setup(
 )
 ```
 
+## QA / 常见问题
+
+Q: 不加 `--release` 会怎样？
+A: 不会删除 `.py`，仍可正常构建并保留源码。
+Without `--release`, `.py` files are kept while building.
+
+示例：
+Examples:
+
+- `python setup.py build`
+- `python setup.py bdist_wheel`
+
+Q: 临时目录构建默认开启吗？目录名是什么？
+A: 默认未开启，需要设置 `USE_TEMP_BUILD=1`。
+默认目录名为 `.build_package_tmp`，可通过 `BUILD_TEMP_DIR` 覆盖。
+It is off by default; set `USE_TEMP_BUILD=1` to enable.
+The default directory is `.build_package_tmp`, override via `BUILD_TEMP_DIR`.
+
 ## Modules / 模块概览
 - `buildkit/commands.py`: `ReleaseBuild` 与 `CleanBuild`。
   - `ReleaseBuild` and `CleanBuild`.
@@ -68,11 +97,14 @@ setup(
   - Parses `--old` / `--release`.
 - `buildkit/release.py`: 发布模式源码剥离。
   - Release-mode source stripping.
+- `buildkit/plan.py`: BuildPlan 统一构建流程。
+  - BuildPlan workflow orchestration.
 
 ## Why setup.py / 为何保留 setup.py
 `setup.py` 能承载条件编译与发布模式清理，适合构建逻辑复杂的项目。
 `setup.py` handles conditional builds and release cleanup, which suits complex build logic.
 
 ## More Examples / 更多示例
-详细场景请见 `docs/setup-examples.md`。
-See `docs/setup-examples.md` for more scenarios.
+
+详细场景请见 `docs/examples/README.md`。
+See `docs/examples/README.md` for more scenarios.

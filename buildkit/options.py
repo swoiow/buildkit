@@ -26,6 +26,8 @@ class BuildOptions:
     :param exclude_package_patterns: package name patterns to exclude.
     :param exclude_source_globs: source file glob patterns to exclude.
     :param exclude_source_dirs: directory names to exclude from source discovery.
+    :param use_gitignore: whether to respect .gitignore when copying to temp build.
+    :param gitignore_filename: gitignore file name.
     """
 
     flags: BuildFlags
@@ -52,6 +54,8 @@ class BuildOptions:
     exclude_package_patterns: List[str] = field(default_factory=list)
     exclude_source_globs: List[str] = field(default_factory=list)
     exclude_source_dirs: List[str] = field(default_factory=list)
+    use_gitignore: bool = False
+    gitignore_filename: str = ".gitignore"
 
     def merged_with_overrides(
         self,
@@ -82,6 +86,8 @@ class BuildOptions:
             exclude_package_patterns=list(self.exclude_package_patterns),
             exclude_source_globs=list(self.exclude_source_globs),
             exclude_source_dirs=list(self.exclude_source_dirs),
+            use_gitignore=self.use_gitignore,
+            gitignore_filename=self.gitignore_filename,
         )
 
 

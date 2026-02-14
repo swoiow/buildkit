@@ -1,109 +1,118 @@
-name: Build and Package BuildKit
+name: Build
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
-    branches:
-      - "main"
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
 
 permissions:
   contents: write
 
-concurrency:
-  group: build-release
-  cancel-in-progress: true
-
 jobs:
-  build-wheels:
-    name: Building ${{ matrix.os }} / Py ${{ matrix.python-version }}
-    env:
-      PYTHONUTF8: "1"
-      PYTHONIOENCODING: "utf-8"
-    runs-on: ${{ matrix.os }}
+  build:
+    name: Build (${{ matrix.os }}, Py${{ matrix.python-version }})
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.12", "3.13"]
+        os: [ ubuntu-latest ]
+        python-version: [ "3.12", "3.13" ]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
 
     steps:
-      - name: 📥 Checkout source code
-        uses: actions/checkout@v5
-
-      - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: setup.py
 
-      - name: 📦 Create virtualenv
+      - name: 📦 Setup Virtualenv
         run: |
           python -m venv venv
-          echo "PYTHON_EXEC=$(pwd)/venv/bin/python" >> $GITHUB_ENV
-        shell: bash
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "PYTHON_EXEC=$(pwd)/venv/Scripts/python.exe" >> $GITHUB_ENV
+          else
+            echo "PYTHON_EXEC=$(pwd)/venv/bin/python" >> $GITHUB_ENV
+          fi
 
-      - name: 📚 Install build dependencies
+      - name: 🛠️ Install Deps
         run: |
-          $PYTHON_EXEC -m pip install --upgrade pip build
-        shell: bash
+          $PYTHON_EXEC -m pip install -q --upgrade pip setuptools wheel Cython pytest
+          [ -f requirements.txt ] && $PYTHON_EXEC -m pip install -r requirements.txt || true
+          $PYTHON_EXEC -m pytest tests/ -v
 
-      - name: 🏗️ Build wheel (release mode)
+      - name: 📦 Build
         run: |
-          $PYTHON_EXEC -m build --wheel
-        shell: bash
+          $PYTHON_EXEC setup.py build_ext --inplace
+          $PYTHON_EXEC setup.py bdist_wheel --release
 
-      - name: ⬆️ Upload wheel artifacts
-        uses: actions/upload-artifact@v4
+      - name: ⬆️ Upload
+        uses: actions/upload-artifact@v6
         with:
-          name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: dist/*.whl
-          retention-days: 1
+          name: build-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*
+          retention-days: 3
 
-  package-artifacts:
-    name: Package all wheels into one zip
-    needs: build-wheels
+  package-and-release:
+    name: Package & Release
+    needs: build
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      S3_BUCKET: ${{ vars.S3_BUCKET || '' }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT || '' }}
+      S3_PREFIX: ${{ vars.S3_PREFIX || 'builds' }}
+      AWS_DEFAULT_REGION: ${{ vars.S3_REGION || 'auto' }}
+
     steps:
-      - name: 📥 Download all wheel artifacts
+      - name: 📥 Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: collected
           merge-multiple: true
 
-      - name: 📦 Bundle all wheels
+      - name: 🚀 S3/R2 Upload
+        if: ${{ env.AWS_ACCESS_KEY_ID && env.S3_BUCKET && startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          mkdir -p packaged
-          zip -j packaged/buildkit-all-wheels.zip collected/*
-        shell: bash
+          CLEAN_PREFIX=$(python3 -c "import os; print(os.getenv('S3_PREFIX', '').strip('/'))")
+          CLEAN_BUCKET=$(python3 -c "import os; print(os.getenv('S3_BUCKET', '').strip('/'))")
+          aws s3 cp collected/ s3://${CLEAN_BUCKET}/${CLEAN_PREFIX:-builds}/ \
+            --recursive \
+            --exclude "*" \
+            --include "*.whl" \
+            --endpoint-url ${{ env.S3_ENDPOINT }}
 
-      - name: ⬆️ Upload final packaged zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildkit-packaged
-          path: packaged/*
-          retention-days: 3
-
-  publish-release:
-    name: Publish wheels to latest release
-    needs:
-      - build-wheels
-      - package-artifacts
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Download packaged artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release_artifacts
-          merge-multiple: true
-
-      - name: 🚀 Upload wheel assets to release
+      - name: 📦 Pack & Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Latest Build
-          draft: false
-          prerelease: false
-          files: |
-            release_artifacts/**/*.whl
+          name: "Latest Build"
+          body: "Automated build. Updated: ${{ github.event.head_commit.timestamp }}"
+          prerelease: true
+          files: collected/*.whl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ⬆️ GitHub Package
+        run: |
+          mkdir -p packaged
+          zip -rj packaged/${{ github.event.repository.name }}-all-builds.zip collected/
+
+      - name: ⬆️ Upload to GitHub
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ github.event.repository.name }}-all-builds
+          path: packaged/
+          retention-days: 3
