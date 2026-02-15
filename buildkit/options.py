@@ -28,6 +28,7 @@ class BuildOptions:
     :param exclude_source_dirs: directory names to exclude from source discovery.
     :param use_gitignore: whether to respect .gitignore when copying to temp build.
     :param gitignore_filename: gitignore file name.
+    :param use_namespace_packages: whether to use find_namespace_packages for package expansion.
     """
 
     flags: BuildFlags
@@ -56,6 +57,7 @@ class BuildOptions:
     exclude_source_dirs: List[str] = field(default_factory=list)
     use_gitignore: bool = False
     gitignore_filename: str = ".gitignore"
+    use_namespace_packages: bool = False
 
     def merged_with_overrides(
         self,
@@ -88,6 +90,7 @@ class BuildOptions:
             exclude_source_dirs=list(self.exclude_source_dirs),
             use_gitignore=self.use_gitignore,
             gitignore_filename=self.gitignore_filename,
+            use_namespace_packages=self.use_namespace_packages,
         )
 
 

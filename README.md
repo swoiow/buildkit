@@ -70,6 +70,24 @@ setup(
 
 ## QA / 常见问题
 
+Q: `packages=["mypkg", "mypkg.*"]` 这种写法可以吗？如何排除子包？
+A: buildkit 会自动展开通配包名（基于 `find_packages`），排除可用 `exclude_packages`。
+示例：
+Example:
+
+```python
+plan = BuildPlan(
+    options=options,
+    packages=["mypkg", "mypkg.*"],
+    package_dir={"mypkg": "mypkg"},
+    exclude_packages=["mypkg.data", "mypkg.data.*"],
+)
+```
+
+Q: 命名空间包（没有 `__init__.py`）怎么办？
+A: 开启 `options.use_namespace_packages = True`，会用 `find_namespace_packages` 展开通配包名。
+Use `options.use_namespace_packages = True` for namespace packages.
+
 Q: 不加 `--release` 会怎样？
 A: 不会删除 `.py`，仍可正常构建并保留源码。
 Without `--release`, `.py` files are kept while building.

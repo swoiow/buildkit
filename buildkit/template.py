@@ -24,6 +24,7 @@ options = default_build_options()
 # options.exclude_source_globs = ["**/migrations/*.py", "**/legacy/*.py"]
 # options.exclude_source_dirs = ["node_modules", "dist"]
 # options.use_gitignore = True  # 使用 .gitignore 过滤临时目录复制
+# options.use_namespace_packages = True  # 命名空间包使用 find_namespace_packages
 
 # 可选：使用高级 Cython 编译参数
 # from buildkit.cython import CYTHON_DIRECTIVES_FULL

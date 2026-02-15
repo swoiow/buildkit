@@ -12,7 +12,7 @@ from .cython import (
     safe_cythonize,
 )
 from .options import BuildOptions
-from .package import filter_packages
+from .package import expand_packages, filter_packages
 from .summary import copy_to_temp_build_dir, get_package_dir_mapping
 
 
@@ -43,8 +43,14 @@ class BuildPlan:
 
     def __post_init__(self) -> None:
         self.build_root = self.options.base_dir
+        expanded = expand_packages(
+            self.packages,
+            self.package_dir,
+            self.options.base_dir,
+            use_namespace_packages=self.options.use_namespace_packages,
+        )
         self.effective_packages = filter_packages(
-            self.packages, self.options.exclude_package_patterns + self.exclude_packages
+            expanded, self.options.exclude_package_patterns + self.exclude_packages
         )
         self.effective_package_dir = dict(self.package_dir)
 

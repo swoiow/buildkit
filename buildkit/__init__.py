@@ -11,6 +11,7 @@ from .cython import (
 )
 from .flags import BuildFlags, consume_build_flags
 from .options import BuildOptions, default_build_options
+from .package import expand_packages
 from .version import read_version
 
 
@@ -25,6 +26,7 @@ __all__ = [
     "cythonize_extensions",
     "default_build_options",
     "discover_sources_from_packages",
+    "expand_packages",
     "extensions_from_packages",
     "extensions_from_sources",
     "filter_changed_sources",
