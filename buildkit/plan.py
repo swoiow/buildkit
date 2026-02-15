@@ -12,7 +12,7 @@ from .cython import (
     safe_cythonize,
 )
 from .options import BuildOptions
-from .package import expand_packages, filter_packages
+from .package import expand_packages, package_to_path, split_packages
 from .summary import copy_to_temp_build_dir, get_package_dir_mapping
 
 
@@ -40,6 +40,7 @@ class BuildPlan:
     effective_packages: List[str] = field(init=False, default_factory=list)
     effective_package_dir: Dict[str, str] = field(init=False, default_factory=dict)
     build_root: Path = field(init=False)
+    excluded_packages: List[str] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         self.build_root = self.options.base_dir
@@ -49,9 +50,12 @@ class BuildPlan:
             self.options.base_dir,
             use_namespace_packages=self.options.use_namespace_packages,
         )
-        self.effective_packages = filter_packages(
-            expanded, self.options.exclude_package_patterns + self.exclude_packages
+        included, excluded = split_packages(
+            expanded,
+            self.options.exclude_package_patterns + self.exclude_packages,
         )
+        self.effective_packages = included
+        self.excluded_packages = excluded
         self.effective_package_dir = dict(self.package_dir)
 
     def apply_temp_build(self) -> None:
@@ -73,12 +77,21 @@ class BuildPlan:
         """构建 Cython 扩展列表。"""
         if self.options.flags.is_old:
             return []
+        excluded_dirs = set()
+        for pkg in self.excluded_packages:
+            path = package_to_path(pkg, self.effective_package_dir, self.build_root)
+            try:
+                rel = path.relative_to(self.build_root).as_posix()
+            except ValueError:
+                rel = path.as_posix()
+            excluded_dirs.add(rel)
         sources = discover_sources_from_packages(
             self.effective_packages,
             self.effective_package_dir,
             exclude_init=True,
             exclude_globs=self.options.exclude_source_globs + self.exclude_source_globs,
-            exclude_dirs=set(self.options.exclude_source_dirs + self.exclude_source_dirs),
+            exclude_dirs=set(self.options.exclude_source_dirs + self.exclude_source_dirs)
+                         | set(excluded_dirs),
         )
         if self.options.cython_incremental:
             sources = filter_changed_sources(sources, self.options.cy_cache_file)

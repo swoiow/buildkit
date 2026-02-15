@@ -1,6 +1,6 @@
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Iterable, List, Set
+from typing import Iterable, List, Set, Tuple
 
 from setuptools import find_namespace_packages, find_packages
 
@@ -80,3 +80,42 @@ def filter_packages(packages: Iterable[str], exclude_patterns: List[str]) -> Lis
             continue
         filtered.append(pkg)
     return filtered
+
+
+def split_packages(
+    packages: Iterable[str],
+    exclude_patterns: List[str],
+) -> Tuple[List[str], List[str]]:
+    """拆分包列表为保留与排除两组。
+
+    :param packages: package names.
+    :param exclude_patterns: patterns or substrings to exclude.
+    :return: (included, excluded).
+    """
+    included: List[str] = []
+    excluded: List[str] = []
+    for pkg in packages:
+        if any(pat in pkg or fnmatchcase(pkg, pat) for pat in exclude_patterns):
+            excluded.append(pkg)
+            continue
+        included.append(pkg)
+    return included, excluded
+
+
+def package_to_path(pkg: str, package_dir: dict, base_dir: Path) -> Path:
+    """将包名转换为目录路径。
+
+    :param pkg: package name.
+    :param package_dir: mapping from package name to path.
+    :param base_dir: project base dir.
+    :return: resolved package path.
+    """
+    parts = pkg.split(".")
+    top_pkg = parts[0]
+    if top_pkg in package_dir:
+        base = base_dir / package_dir[top_pkg]
+        return Path(base, *parts[1:]).resolve()
+    if "" in package_dir:
+        base = base_dir / package_dir[""]
+        return Path(base, *parts).resolve()
+    return Path(base_dir, *parts).resolve()

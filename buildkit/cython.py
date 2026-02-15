@@ -37,11 +37,15 @@ def _ensure_cythonize():
 
 
 def _is_excluded_path(path: Path, exclude_globs: List[str], exclude_dirs: Set[str]) -> bool:
+    posix_path = path.as_posix()
+    for item in exclude_dirs:
+        if "/" in item or "\\" in item:
+            if item.replace("\\", "/") in posix_path:
+                return True
     if any(part in exclude_dirs for part in path.parts):
         return True
     if not exclude_globs:
         return False
-    posix_path = path.as_posix()
     return any(fnmatchcase(posix_path, pattern) for pattern in exclude_globs)
 
 
