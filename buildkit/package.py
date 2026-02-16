@@ -9,6 +9,12 @@ def _is_pattern(value: str) -> bool:
     return any(ch in value for ch in ("*", "?", "[", "]"))
 
 
+def _match_exclude_pattern(pkg: str, pattern: str) -> bool:
+    if _is_pattern(pattern):
+        return fnmatchcase(pkg, pattern)
+    return pkg == pattern or pkg.startswith(f"{pattern}.")
+
+
 def _normalize_root_dir(base_dir: Path, package_dir: dict, top_pkg: str) -> Path:
     if top_pkg in package_dir:
         return (base_dir / package_dir[top_pkg]).resolve()
@@ -76,7 +82,7 @@ def filter_packages(packages: Iterable[str], exclude_patterns: List[str]) -> Lis
     """
     filtered: List[str] = []
     for pkg in packages:
-        if any(pat in pkg or fnmatchcase(pkg, pat) for pat in exclude_patterns):
+        if any(_match_exclude_pattern(pkg, pat) for pat in exclude_patterns):
             continue
         filtered.append(pkg)
     return filtered
@@ -95,7 +101,7 @@ def split_packages(
     included: List[str] = []
     excluded: List[str] = []
     for pkg in packages:
-        if any(pat in pkg or fnmatchcase(pkg, pat) for pat in exclude_patterns):
+        if any(_match_exclude_pattern(pkg, pat) for pat in exclude_patterns):
             excluded.append(pkg)
             continue
         included.append(pkg)
@@ -119,3 +125,35 @@ def package_to_path(pkg: str, package_dir: dict, base_dir: Path) -> Path:
         base = base_dir / package_dir[""]
         return Path(base, *parts).resolve()
     return Path(base_dir, *parts).resolve()
+
+
+def exclude_patterns_to_paths(
+    patterns: Iterable[str],
+    package_dir: dict,
+    base_dir: Path,
+) -> List[Path]:
+    """将可解析的包排除模式转换为目录路径。
+
+    :param patterns: package exclude patterns.
+    :param package_dir: mapping from package name to path.
+    :param base_dir: project base dir.
+    :return: directory paths.
+    """
+    paths: List[Path] = []
+    seen: Set[Path] = set()
+    for pattern in patterns:
+        if any(ch in pattern for ch in ("?", "[")):
+            continue
+        pkg = pattern
+        if pattern.endswith(".*"):
+            pkg = pattern[:-2]
+        elif "*" in pattern:
+            continue
+        if not pkg:
+            continue
+        path = package_to_path(pkg, package_dir, base_dir)
+        if path in seen:
+            continue
+        seen.add(path)
+        paths.append(path)
+    return paths

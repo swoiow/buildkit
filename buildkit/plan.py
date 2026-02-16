@@ -12,7 +12,7 @@ from .cython import (
     safe_cythonize,
 )
 from .options import BuildOptions
-from .package import expand_packages, package_to_path, split_packages
+from .package import exclude_patterns_to_paths, expand_packages, package_to_path, split_packages
 from .summary import copy_to_temp_build_dir, get_package_dir_mapping
 
 
@@ -77,9 +77,16 @@ class BuildPlan:
         """构建 Cython 扩展列表。"""
         if self.options.flags.is_old:
             return []
+        exclude_patterns = self.options.exclude_package_patterns + self.exclude_packages
         excluded_dirs = set()
         for pkg in self.excluded_packages:
             path = package_to_path(pkg, self.effective_package_dir, self.build_root)
+            try:
+                rel = path.relative_to(self.build_root).as_posix()
+            except ValueError:
+                rel = path.as_posix()
+            excluded_dirs.add(rel)
+        for path in exclude_patterns_to_paths(exclude_patterns, self.effective_package_dir, self.build_root):
             try:
                 rel = path.relative_to(self.build_root).as_posix()
             except ValueError:
