@@ -1,8 +1,10 @@
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import List, Optional, Set
 
 from setuptools import Command
 from setuptools.command.build_ext import build_ext
+from setuptools.command.build_py import build_py
 
 from .options import BuildOptions, default_build_options
 from .release import strip_build_output, strip_sources
@@ -69,6 +71,70 @@ class ReleaseBuild(build_ext):
         :return: None.
         """
         print(f"[CLEAN] Removed {removed} source files in release mode")
+
+
+class ReleaseBuildPy(build_py):
+    """发布构建：build_py 后清理 build_lib 中的源码文件。
+
+    :param options: BuildOptions instance.
+    """
+
+    options: Optional[BuildOptions] = None
+    keep_files: Set[str] = set()
+    strip_patterns: List[str] = []
+    skip_dirs: Set[str] = set()
+    exclude_module_globs: List[str] = []
+
+    def _module_exclude_globs(self, options: BuildOptions) -> List[str]:
+        globs = list(self.exclude_module_globs)
+        if hasattr(options, "effective_exclude_modules"):
+            globs += options.effective_exclude_modules()
+        return globs
+
+    def find_package_modules(self, package, package_dir):
+        modules = super().find_package_modules(package, package_dir)
+        if not self.options:
+            return modules
+        globs = self._module_exclude_globs(self.options)
+        if not globs:
+            return modules
+        kept = []
+        for pkg, mod, file_path in modules:
+            path = Path(file_path)
+            candidates = [path.as_posix(), path.name]
+            try:
+                base_dir = options.base_dir.resolve()
+                candidates.append(path.resolve().relative_to(base_dir).as_posix())
+            except Exception:
+                pass
+            if any(fnmatchcase(candidate, pattern) for candidate in candidates for pattern in globs):
+                continue
+            kept.append((pkg, mod, file_path))
+        return kept
+
+    def _effective_options(self) -> BuildOptions:
+        base = self.options or default_build_options()
+        return base.merged_with_overrides(
+            keep_files=self.keep_files,
+            strip_patterns=self.strip_patterns,
+            skip_dirs=self.skip_dirs,
+        )
+
+    def run(self):
+        super().run()
+        options = self._effective_options()
+        if not options.flags.is_release:
+            return
+        build_lib = getattr(self, "build_lib", None)
+        if not build_lib:
+            return
+        removed = strip_build_output(
+            Path(build_lib),
+            options.strip_patterns,
+            options.keep_files,
+            options.skip_dirs,
+        )
+        print(f"[CLEAN] Removed {removed} source files in build_py output")
 
 
 class CleanBuild(Command):

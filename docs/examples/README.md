@@ -6,6 +6,7 @@ Ordered from simple to advanced:
 1. `docs/examples/01-minimal.md`
 2. `docs/examples/02-release.md`
 3. `docs/examples/03-temp-build-assets.md`
+4. `docs/reference-cases.md`
 
 Note:
 通配包名（如 `mypkg.*`）会自动展开为真实包列表，排除子包请用 `exclude_packages`。

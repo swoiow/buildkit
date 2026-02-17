@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Type
 
 from setuptools import Extension
 
-from .commands import CleanBuild, ReleaseBuild
+from .commands import CleanBuild, ReleaseBuild, ReleaseBuildPy
 from .cython import (
     discover_sources_from_packages,
     extensions_from_sources,
@@ -26,6 +26,7 @@ class BuildPlan:
     :param exclude_packages: package exclusion patterns.
     :param exclude_source_globs: source path glob patterns.
     :param exclude_source_dirs: directory names to skip.
+    :param exclude_modules: module file globs to exclude from build_py output.
     :param asset_copy_hook: optional hook for copying assets into temp build dir.
     """
 
@@ -35,6 +36,7 @@ class BuildPlan:
     exclude_packages: List[str] = field(default_factory=list)
     exclude_source_globs: List[str] = field(default_factory=list)
     exclude_source_dirs: List[str] = field(default_factory=list)
+    exclude_modules: List[str] = field(default_factory=list)
     asset_copy_hook: Optional[Callable[["BuildPlan"], None]] = None
 
     effective_packages: List[str] = field(init=False, default_factory=list)
@@ -52,7 +54,7 @@ class BuildPlan:
         )
         included, excluded = split_packages(
             expanded,
-            self.options.exclude_package_patterns + self.exclude_packages,
+            self.options.effective_exclude_packages() + self.exclude_packages,
         )
         self.effective_packages = included
         self.excluded_packages = excluded
@@ -77,7 +79,7 @@ class BuildPlan:
         """构建 Cython 扩展列表。"""
         if self.options.flags.is_old:
             return []
-        exclude_patterns = self.options.exclude_package_patterns + self.exclude_packages
+        exclude_patterns = self.options.effective_exclude_packages() + self.exclude_packages
         excluded_dirs = set()
         for pkg in self.excluded_packages:
             path = package_to_path(pkg, self.effective_package_dir, self.build_root)
@@ -96,7 +98,7 @@ class BuildPlan:
             self.effective_packages,
             self.effective_package_dir,
             exclude_init=True,
-            exclude_globs=self.options.exclude_source_globs + self.exclude_source_globs,
+            exclude_globs=self.options.effective_exclude_sources() + self.exclude_source_globs,
             exclude_dirs=set(self.options.exclude_source_dirs + self.exclude_source_dirs)
                          | set(excluded_dirs),
         )
@@ -105,16 +107,38 @@ class BuildPlan:
         extensions = extensions_from_sources(sources, base_dir=self.build_root)
         return safe_cythonize(extensions, self.options.cython_directives)
 
-    def cmdclass(self, build_ext_cls: Optional[Type[ReleaseBuild]] = None) -> Dict[str, Type[object]]:
+    def cmdclass(
+        self,
+        build_ext_cls: Optional[Type[ReleaseBuild]] = None,
+        build_py_cls: Optional[Type[ReleaseBuildPy]] = None,
+    ) -> Dict[str, Type[object]]:
         """生成 cmdclass 映射。
 
         :param build_ext_cls: custom build_ext class.
         :return: cmdclass mapping.
         """
         build_ext_cls = build_ext_cls or ReleaseBuild
+        build_py_cls = build_py_cls or ReleaseBuildPy
         build_ext_cls.options = self.options
         build_ext_cls.package_list = list(self.effective_packages)
-        return {"build_ext": build_ext_cls, "clean": CleanBuild}
+        build_py_cls.options = self.options
+        if hasattr(build_py_cls, "keep_files"):
+            build_py_cls.keep_files = set(getattr(build_py_cls, "keep_files", set())) | set(
+                getattr(build_ext_cls, "keep_files", set())
+            )
+        if hasattr(build_py_cls, "strip_patterns"):
+            build_py_cls.strip_patterns = list(getattr(build_py_cls, "strip_patterns", [])) + list(
+                getattr(build_ext_cls, "strip_patterns", [])
+            )
+        if hasattr(build_py_cls, "skip_dirs"):
+            build_py_cls.skip_dirs = set(getattr(build_py_cls, "skip_dirs", set())) | set(
+                getattr(build_ext_cls, "skip_dirs", set())
+            )
+        if hasattr(build_py_cls, "exclude_module_globs"):
+            build_py_cls.exclude_module_globs = list(getattr(build_py_cls, "exclude_module_globs", [])) + list(
+                self.exclude_modules
+            )
+        return {"build_ext": build_ext_cls, "build_py": build_py_cls, "clean": CleanBuild}
 
     def build(self) -> Tuple[Dict[str, object], List[Extension]]:
         """生成 setup.py 所需配置。

@@ -1,4 +1,4 @@
-from .commands import CleanBuild, ReleaseBuild
+from .commands import CleanBuild, ReleaseBuild, ReleaseBuildPy
 from .cython import (
     CYTHON_DIRECTIVES_FULL,
     CYTHON_DIRECTIVES_SIMPLE,
@@ -22,6 +22,7 @@ __all__ = [
     "CYTHON_DIRECTIVES_SIMPLE",
     "CleanBuild",
     "ReleaseBuild",
+    "ReleaseBuildPy",
     "consume_build_flags",
     "cythonize_extensions",
     "default_build_options",

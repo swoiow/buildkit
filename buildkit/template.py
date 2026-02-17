@@ -20,8 +20,9 @@ options = default_build_options()
 # options.use_temp_build = True
 
 # 可选：排除某些包或源文件
-# options.exclude_package_patterns = ["tests", "examples*"]
-# options.exclude_source_globs = ["**/migrations/*.py", "**/legacy/*.py"]
+# options.exclude_packages = ["tests", "examples*"]
+# options.exclude_sources = ["**/migrations/*.py", "**/legacy/*.py"]
+# options.exclude_modules = ["yourpkg/sms/pipeline.py"]
 # options.exclude_source_dirs = ["node_modules", "dist"]
 # options.use_gitignore = True  # 使用 .gitignore 过滤临时目录复制
 # options.use_namespace_packages = True  # 命名空间包使用 find_namespace_packages
@@ -70,9 +71,6 @@ plan = BuildPlan(
     # packages=["good_python", "good_python.core"],
     # package_dir={"": "."},
 
-    # exclude_packages=["good_python.experimental"],
-    # exclude_source_globs=["**/tmp/*.py"],
-    # exclude_source_dirs=["tmp"],
     asset_copy_hook=copy_assets,
 )
 

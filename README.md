@@ -92,6 +92,15 @@ Q: 不加 `--release` 会怎样？
 A: 不会删除 `.py`，仍可正常构建并保留源码。
 Without `--release`, `.py` files are kept while building.
 
+Q: `--release` 下 `.py` 为什么还会出现在 whl？
+A: `build_py` 会在 `build_ext` 后重新拷贝 `.py`。buildkit 现在通过 `ReleaseBuildPy` 在 `build_py` 后再次清理。
+In release builds, `build_py` runs after `build_ext` and re-copies `.py`; buildkit now strips them again via
+`ReleaseBuildPy`.
+
+Q: 只想从 whl 里排除个别文件（如 `pipeline.py`）怎么办？
+A: 使用 `options.exclude_modules`（支持文件名或路径 glob），由 `ReleaseBuildPy` 在 `build_py` 阶段过滤。
+Use `options.exclude_modules` (file name or path globs) to drop module files during `build_py`.
+
 示例：
 Examples:
 

@@ -23,8 +23,12 @@ class BuildOptions:
     :param cython_incremental: enable incremental cythonize.
     :param cy_cache_file: cache file path for incremental builds.
     :param summary_enabled: enable summary output.
-    :param exclude_package_patterns: package name patterns to exclude.
-    :param exclude_source_globs: source file glob patterns to exclude.
+    :param exclude_packages: package name patterns to exclude.
+    :param exclude_sources: source file glob patterns to exclude.
+    :param exclude_modules: module file globs to exclude from build_py output.
+    :param exclude_module_globs: legacy alias for exclude_modules.
+    :param exclude_package_patterns: legacy alias for exclude_packages.
+    :param exclude_source_globs: legacy alias for exclude_sources.
     :param exclude_source_dirs: directory names to exclude from source discovery.
     :param use_gitignore: whether to respect .gitignore when copying to temp build.
     :param gitignore_filename: gitignore file name.
@@ -52,6 +56,10 @@ class BuildOptions:
     cython_incremental: bool = False
     cy_cache_file: Path = field(default_factory=lambda: Path(".cycache"))
     summary_enabled: bool = True
+    exclude_packages: List[str] = field(default_factory=list)
+    exclude_sources: List[str] = field(default_factory=list)
+    exclude_modules: List[str] = field(default_factory=list)
+    exclude_module_globs: List[str] = field(default_factory=list)
     exclude_package_patterns: List[str] = field(default_factory=list)
     exclude_source_globs: List[str] = field(default_factory=list)
     exclude_source_dirs: List[str] = field(default_factory=list)
@@ -91,7 +99,32 @@ class BuildOptions:
             use_gitignore=self.use_gitignore,
             gitignore_filename=self.gitignore_filename,
             use_namespace_packages=self.use_namespace_packages,
+            exclude_packages=list(self.exclude_packages),
+            exclude_sources=list(self.exclude_sources),
+            exclude_modules=list(self.exclude_modules),
+            exclude_module_globs=list(self.exclude_module_globs),
         )
+
+    def effective_exclude_packages(self) -> List[str]:
+        """获取完整包排除列表。
+
+        :return: package exclude patterns.
+        """
+        return list(self.exclude_packages) + list(self.exclude_package_patterns)
+
+    def effective_exclude_sources(self) -> List[str]:
+        """获取完整源码排除列表。
+
+        :return: source file exclude globs.
+        """
+        return list(self.exclude_sources) + list(self.exclude_source_globs)
+
+    def effective_exclude_modules(self) -> List[str]:
+        """获取完整模块排除列表。
+
+        :return: module file exclude globs.
+        """
+        return list(self.exclude_modules) + list(self.exclude_module_globs)
 
 
 def default_build_options(argv: Optional[List[str]] = None, base_dir: Optional[Path] = None) -> BuildOptions:
