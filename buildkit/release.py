@@ -1,9 +1,32 @@
 from pathlib import Path
 from typing import List, Set
 
+from .runtime import is_dry_run
+
 
 def _should_skip(path: Path, skip_dirs: Set[str]) -> bool:
     return any(part in skip_dirs for part in path.parts)
+
+
+def _collect_targets(
+    base_dir: Path,
+    patterns: List[str],
+    keep_files: Set[str],
+    skip_dirs: Set[str],
+) -> List[Path]:
+    targets: List[Path] = []
+    seen: Set[Path] = set()
+    for pattern in patterns:
+        for path in base_dir.rglob(pattern):
+            if _should_skip(path, skip_dirs):
+                continue
+            if path.name in keep_files:
+                continue
+            if path in seen:
+                continue
+            seen.add(path)
+            targets.append(path)
+    return targets
 
 
 def strip_sources(
@@ -20,19 +43,19 @@ def strip_sources(
     :param skip_dirs: directory names to skip.
     :return: number of removed files.
     """
+    targets = _collect_targets(base_dir, patterns, keep_files, skip_dirs)
+    if is_dry_run():
+        for path in targets:
+            print(f"[DRY-RUN] Would remove {path}")
+        return len(targets)
     removed = 0
-    for pattern in patterns:
-        for path in base_dir.rglob(pattern):
-            if _should_skip(path, skip_dirs):
-                continue
-            if path.name in keep_files:
-                continue
-            try:
-                path.unlink()
-                removed += 1
-                print(f"[CLEAN] Removed {path}")
-            except OSError as exc:
-                print(f"[WARN] Failed to remove {path}: {exc}")
+    for path in targets:
+        try:
+            path.unlink()
+            removed += 1
+            print(f"[CLEAN] Removed {path}")
+        except OSError as exc:
+            print(f"[WARN] Failed to remove {path}: {exc}")
     return removed
 
 

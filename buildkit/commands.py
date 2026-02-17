@@ -8,6 +8,7 @@ from setuptools.command.build_py import build_py
 
 from .options import BuildOptions, default_build_options
 from .release import strip_build_output, strip_sources
+from .runtime import is_dry_run
 from .summary import print_summary
 
 
@@ -70,6 +71,9 @@ class ReleaseBuild(build_ext):
         :param options: build options.
         :return: None.
         """
+        if is_dry_run():
+            print(f"[DRY-RUN] Would remove {removed} source files in release mode")
+            return
         print(f"[CLEAN] Removed {removed} source files in release mode")
 
 
@@ -103,11 +107,13 @@ class ReleaseBuildPy(build_py):
             path = Path(file_path)
             candidates = [path.as_posix(), path.name]
             try:
-                base_dir = options.base_dir.resolve()
+                base_dir = self.options.base_dir.resolve()
                 candidates.append(path.resolve().relative_to(base_dir).as_posix())
             except Exception:
                 pass
             if any(fnmatchcase(candidate, pattern) for candidate in candidates for pattern in globs):
+                if is_dry_run():
+                    print(f"[DRY-RUN] Would exclude module {path}")
                 continue
             kept.append((pkg, mod, file_path))
         return kept
@@ -134,6 +140,9 @@ class ReleaseBuildPy(build_py):
             options.keep_files,
             options.skip_dirs,
         )
+        if is_dry_run():
+            print(f"[DRY-RUN] Would remove {removed} source files in build_py output")
+            return
         print(f"[CLEAN] Removed {removed} source files in build_py output")
 
 

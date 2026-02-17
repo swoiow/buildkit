@@ -19,14 +19,15 @@ buildkit is a `setup.py`-era build toolkit focused on `--old` / `--release` mode
 
 ## Flags / 构建标志
 
-`--old` 与 `--release` 是构建标志，不是命令，需要搭配 `setup.py` 命令使用。
-`--old` and `--release` are flags (not commands) and must be used with a `setup.py` command.
+`--old` / `--release` / `--dry-run` 是构建标志，不是命令，需要搭配 `setup.py` 命令使用。
+`--old` / `--release` / `--dry-run` are flags (not commands) and must be used with a `setup.py` command.
 
 示例：
 Examples:
 
 - `python setup.py build --old`
 - `python setup.py bdist_wheel --release`
+- `python setup.py bdist_wheel --dry-run`
 
 ## Setup.py Example / setup.py 示例
 下面示例展示 `--old` / `--release` 的统一入口（简化版）：
@@ -91,6 +92,19 @@ Use `options.use_namespace_packages = True` for namespace packages.
 Q: 不加 `--release` 会怎样？
 A: 不会删除 `.py`，仍可正常构建并保留源码。
 Without `--release`, `.py` files are kept while building.
+
+Q: `--dry-run` 有什么作用？
+A: 预览发布清理动作与模块过滤，输出详细日志但不删除文件。
+Use `--dry-run` to preview release cleanup and module filtering with detailed logs, without deleting files.
+
+也可用环境变量强制模式：
+Environment flags:
+
+- `BUILDKIT_DRY_RUN=1`
+- `BUILDKIT_RELEASE=1`
+- `BUILDKIT_OLD=1`
+
+CLI flags take precedence over env flags; `--old` overrides `--release` and `--dry-run`.
 
 Q: `--release` 下 `.py` 为什么还会出现在 whl？
 A: `build_py` 会在 `build_ext` 后重新拷贝 `.py`。buildkit 现在通过 `ReleaseBuildPy` 在 `build_py` 后再次清理。

@@ -64,6 +64,7 @@ def print_summary(
     if options:
         print(" ├─ Temp Build Dir:", "ENABLED" if options.use_temp_build else "DISABLED")
         print(" ├─ Release Mode:", "ON" if flags and flags.is_release else "OFF")
+        print(" ├─ Dry Run:", "ON" if flags and flags.is_dry_run else "OFF")
         print(" ├─ Old Mode:", "ON" if flags and flags.is_old else "OFF")
     print(f" └─ DEBUG: {os.environ.get('DEBUG', '0')}")
     print("========================================")

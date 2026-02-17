@@ -6,6 +6,8 @@ from typing import Dict, Iterable, List, Optional, Set
 from Cython.Compiler.Errors import CompileError
 from setuptools import Extension
 
+from .runtime import is_dry_run
+
 
 CYTHON_DIRECTIVES_SIMPLE: Dict[str, object] = {
     "language_level": "3",
@@ -36,17 +38,21 @@ def _ensure_cythonize():
     return cythonize
 
 
-def _is_excluded_path(path: Path, exclude_globs: List[str], exclude_dirs: Set[str]) -> bool:
+def _exclude_reason(path: Path, exclude_globs: List[str], exclude_dirs: Set[str]) -> Optional[str]:
     posix_path = path.as_posix()
     for item in exclude_dirs:
         if "/" in item or "\\" in item:
             if item.replace("\\", "/") in posix_path:
-                return True
-    if any(part in exclude_dirs for part in path.parts):
-        return True
+                return f"dir:{item}"
+    for part in path.parts:
+        if part in exclude_dirs:
+            return f"dir:{part}"
     if not exclude_globs:
-        return False
-    return any(fnmatchcase(posix_path, pattern) for pattern in exclude_globs)
+        return None
+    for pattern in exclude_globs:
+        if fnmatchcase(posix_path, pattern):
+            return f"glob:{pattern}"
+    return None
 
 
 def discover_sources_from_packages(
@@ -64,6 +70,7 @@ def discover_sources_from_packages(
     :return: list of source paths.
     """
     sources: List[Path] = []
+    dry_run = is_dry_run()
     exclude_globs = exclude_globs or []
     exclude_dirs = exclude_dirs or set()
     for pkg in packages:
@@ -74,9 +81,14 @@ def discover_sources_from_packages(
         if not pkg_dir.exists():
             continue
         for py_file in pkg_dir.rglob("*.py"):
-            if _is_excluded_path(py_file, exclude_globs, exclude_dirs):
+            reason = _exclude_reason(py_file, exclude_globs, exclude_dirs)
+            if reason:
+                if dry_run:
+                    print(f"[DRY-RUN] Would exclude source {py_file} ({reason})")
                 continue
             if exclude_init and py_file.name == "__init__.py":
+                if dry_run:
+                    print(f"[DRY-RUN] Would exclude init {py_file}")
                 continue
             sources.append(py_file)
     return sources

@@ -19,6 +19,9 @@ options = default_build_options()
 # 可选：启用临时目录构建，避免删除本地源码
 # options.use_temp_build = True
 
+# 可选：预览 --release 的清理动作（不删除文件）
+# 用法：python setup.py bdist_wheel --dry-run
+
 # 可选：排除某些包或源文件
 # options.exclude_packages = ["tests", "examples*"]
 # options.exclude_sources = ["**/migrations/*.py", "**/legacy/*.py"]
