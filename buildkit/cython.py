@@ -6,7 +6,7 @@ from typing import Dict, Iterable, List, Optional, Set
 from Cython.Compiler.Errors import CompileError
 from setuptools import Extension
 
-from .runtime import is_dry_run
+from .runtime import is_dry_run_env
 
 
 CYTHON_DIRECTIVES_SIMPLE: Dict[str, object] = {
@@ -70,7 +70,7 @@ def discover_sources_from_packages(
     :return: list of source paths.
     """
     sources: List[Path] = []
-    dry_run = is_dry_run()
+    dry_run = is_dry_run_env()
     exclude_globs = exclude_globs or []
     exclude_dirs = exclude_dirs or set()
     for pkg in packages:

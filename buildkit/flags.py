@@ -2,7 +2,7 @@ import sys
 from dataclasses import dataclass
 from typing import List, Optional
 
-from .runtime import is_old_env, is_release_env, set_dry_run, set_old, set_release
+from .runtime import is_dry_run_env, is_old_env, is_release_env, set_dry_run, set_old, set_release
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class BuildFlags:
         """
         is_old = is_old_env()
         is_release = is_release_env()
-        is_dry_run = is_dry_run()
+        is_dry_run = is_dry_run_env()
         if "--old" in argv:
             is_old = True
         if "--release" in argv:

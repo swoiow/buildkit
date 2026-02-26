@@ -42,7 +42,7 @@ def set_old(enabled: bool) -> None:
     _set_env_flag(OLD_ENV, enabled)
 
 
-def is_dry_run() -> bool:
+def is_dry_run_env() -> bool:
     """判断是否处于 dry-run 模式。
 
     :return: True when dry-run enabled.

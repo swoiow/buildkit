@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="buildkit",
-    version="0.3.6",
+    version="0.3.7",
     description="A setup.py-first build toolkit with release stripping and Cython helpers",
     author="git@pylab.me",
     packages=find_packages(),

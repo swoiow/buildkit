@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Set
 
-from .runtime import is_dry_run
+from .runtime import is_dry_run_env
 
 
 def _should_skip(path: Path, skip_dirs: Set[str]) -> bool:
@@ -44,7 +44,7 @@ def strip_sources(
     :return: number of removed files.
     """
     targets = _collect_targets(base_dir, patterns, keep_files, skip_dirs)
-    if is_dry_run():
+    if is_dry_run_env():
         for path in targets:
             print(f"[DRY-RUN] Would remove {path}")
         return len(targets)
