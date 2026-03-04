@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Type
 
 from setuptools import Extension
 
-from .commands import CleanBuild, ReleaseBuild, ReleaseBuildPy
+from .commands import CleanBuild, DevelopBuild, ReleaseBuild, ReleaseBuildPy
 from .cython import (
     discover_sources_from_packages,
     extensions_from_sources,
@@ -136,9 +136,11 @@ class BuildPlan:
             )
         if hasattr(build_py_cls, "exclude_module_globs"):
             build_py_cls.exclude_module_globs = list(getattr(build_py_cls, "exclude_module_globs", [])) + list(
-                self.exclude_modules
+                self.options.effective_exclude_modules() + self.exclude_modules
             )
-        return {"build_ext": build_ext_cls, "build_py": build_py_cls, "clean": CleanBuild}
+        develop_cls = DevelopBuild
+        develop_cls.options = self.options
+        return {"build_ext": build_ext_cls, "build_py": build_py_cls, "clean": CleanBuild, "develop": develop_cls}
 
     def build(self) -> Tuple[Dict[str, object], List[Extension]]:
         """生成 setup.py 所需配置。

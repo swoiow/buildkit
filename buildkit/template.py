@@ -21,6 +21,7 @@ options = default_build_options()
 
 # 可选：预览 --release 的清理动作（不删除文件）
 # 用法：python setup.py bdist_wheel --dry-run
+# 注意：python setup.py develop 为源码链接安装，不执行 release 清理。
 
 # 可选：排除某些包或源文件
 # options.exclude_packages = ["tests", "examples*"]

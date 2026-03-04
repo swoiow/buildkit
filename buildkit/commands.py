@@ -5,6 +5,7 @@ from typing import List, Optional, Set
 from setuptools import Command
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
+from setuptools.command.develop import develop
 
 from .options import BuildOptions, default_build_options
 from .release import strip_build_output, strip_sources
@@ -203,3 +204,20 @@ class CleanBuild(Command):
                 except OSError:
                     pass
         strip_sources(base_dir, self.clean_patterns, options.keep_files, options.skip_dirs)
+
+
+class DevelopBuild(develop):
+    """开发安装命令。
+
+    说明：
+    - `develop` 本质是链接源码目录，不会执行 release 清理。
+    - 当传入 `--release/--dry-run` 时仅给出提示，避免误解。
+    """
+
+    options: Optional[BuildOptions] = None
+
+    def run(self):
+        options = self.options or default_build_options()
+        if options.flags.is_release:
+            print("[WARN] `setup.py develop` does not apply release stripping; source files stay in place.")
+        super().run()
